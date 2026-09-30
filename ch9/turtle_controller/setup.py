@@ -20,7 +20,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "turtle_controller = turtle_controller.turtle_controller:main"
+            "turtle_controller = turtle_controller.turtle_controller:main",
+            "single_link = turtle_controller.single_link_lagrangian:main",
+            "waypoint_server = turtle_controller.waypoint_server:main",
         ],
     },
 )

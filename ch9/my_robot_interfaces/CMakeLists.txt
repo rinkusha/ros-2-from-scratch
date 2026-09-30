@@ -13,6 +13,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/HardwareStatus.msg"
   "srv/ResetCounter.srv"
   "srv/ActivateTurtle.srv"
+  "srv/GetNextWaypoint.srv"
   "action/CountUntil.action"
 )
 

@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
 Single-link, single-motor arm using Lagrangian dynamics.
+Next target angle is fetched asynchronously from the get_next_waypoint service.
 
-Model (pendulum-style link, angle measured from horizontal):
+Model (link angle q measured from horizontal):
     T = 0.5 * I * qd^2                 kinetic energy
     V = m * g * lc * sin(q)            potential energy
     L = T - V
 Euler-Lagrange: d/dt(dL/dqd) - dL/dq = tau - b*qd
     =>  I*qdd + m*g*lc*cos(q) + b*qd = tau
-where I = m*lc^2 + J (J = inertia about the center of mass).
+where I = m*lc^2 + J.
 
-Control: computed-torque (inverse dynamics) with PD on the error.
+Control: computed torque with PD on the error.
     tau = I*(Kp*e - Kd*qd) + m*g*lc*cos(q) + b*qd
 """
 import math
@@ -18,6 +19,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
+from my_robot_interfaces.srv import GetNextWaypoint
 
 
 class SingleLinkLagrangian:
@@ -55,24 +57,42 @@ class SingleLinkNode(Node):
     def __init__(self):
         super().__init__("single_link_lagrangian")
         self.arm_ = SingleLinkLagrangian()
-        # Target joint angles in radians (replace with a waypoint service later)
-        self.waypoints_ = [0.5, -0.5, 1.0, 0.0]
-        self.idx_ = 0
-        self.arm_.q_target = self.waypoints_[0]
+        self.waypoint_pending_ = False
 
+        self.waypoint_client_ = self.create_client(GetNextWaypoint, "get_next_waypoint")
         self.angle_pub_ = self.create_publisher(Float64, "/motor/angle", 10)
         self.torque_pub_ = self.create_publisher(Float64, "/motor/torque", 10)
         self.timer_ = self.create_timer(self.arm_.dt, self.update)
+
+    def request_next_waypoint(self):
+        """Non-blocking: the control loop keeps running while we wait."""
+        if self.waypoint_pending_ or not self.waypoint_client_.service_is_ready():
+            return
+        request = GetNextWaypoint.Request()
+        request.current_angle = self.arm_.q
+        self.waypoint_pending_ = True
+        future = self.waypoint_client_.call_async(request)
+        future.add_done_callback(self.callback_waypoint_response)
+
+    def callback_waypoint_response(self, future):
+        self.waypoint_pending_ = False
+        try:
+            response = future.result()
+        except Exception as e:
+            self.get_logger().error(f"Waypoint service call failed: {e}")
+            return
+        if response.success:
+            self.arm_.q_target = response.target_angle
+            self.get_logger().info(f"New target: {response.target_angle:.2f} rad")
 
     def update(self):
         tau = self.arm_.step()
         self.angle_pub_.publish(Float64(data=self.arm_.q))
         self.torque_pub_.publish(Float64(data=tau))
 
+        # Arm holds its current target until a new one arrives.
         if self.arm_.at_target():
-            self.idx_ = (self.idx_ + 1) % len(self.waypoints_)
-            self.arm_.q_target = self.waypoints_[self.idx_]
-            self.get_logger().info(f"Next target: {self.arm_.q_target:.2f} rad")
+            self.request_next_waypoint()
 
 
 def main(args=None):
