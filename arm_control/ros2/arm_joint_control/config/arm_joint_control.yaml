@@ -1,0 +1,36 @@
+# Parameters for both nodes.
+#
+# joint_names must list exactly the joints the firmware was built with
+# (cfg::kJoints in firmware/.../board_config.hpp, 3 by default). Add joint4..6
+# to both nodes when you extend the pin table.
+#
+# Gains are in normalised motor command units (1.0 = full PWM duty) per rad,
+# rad*s, rad/s. Start with kp only, add kd to damp, then a little ki for
+# gravity-loaded joints. out_limit caps the duty so a bad gain cannot slam the
+# joint. Every value here can be changed live with
+#   ros2 param set /joint_bridge joint1.kp 1.5
+# and is pushed to the firmware immediately.
+
+joint_bridge:
+  ros__parameters:
+    port: /dev/ttyUSB0          # WSL: attach the USB serial with usbipd first
+    baud: 921600
+    control_rate_hz: 100.0      # setpoint rate to the ESP32
+    setpoint_stale_ms: 200      # stop forwarding setpoints older than this
+    ack_timeout_ms: 250
+    reconnect_period_ms: 1000
+    joint_names: [joint1, joint2, joint3]
+
+    joint1: {kp: 1.0, ki: 0.0, kd: 0.02, kff_v: 0.0, i_limit: 0.3, out_limit: 0.8, vel_filter_hz: 50.0, pos_min: -3.0, pos_max: 3.0}
+    joint2: {kp: 1.2, ki: 0.1, kd: 0.03, kff_v: 0.0, i_limit: 0.4, out_limit: 0.9, vel_filter_hz: 50.0, pos_min: -1.6, pos_max: 1.6}
+    joint3: {kp: 1.2, ki: 0.1, kd: 0.03, kff_v: 0.0, i_limit: 0.4, out_limit: 0.9, vel_filter_hz: 50.0, pos_min: -2.4, pos_max: 2.4}
+    # joint4: {kp: 0.8, ki: 0.0, kd: 0.02, kff_v: 0.0, i_limit: 0.3, out_limit: 0.8, vel_filter_hz: 50.0, pos_min: -3.0, pos_max: 3.0}
+    # joint5: {kp: 0.8, ki: 0.0, kd: 0.02, kff_v: 0.0, i_limit: 0.3, out_limit: 0.8, vel_filter_hz: 50.0, pos_min: -1.6, pos_max: 1.6}
+    # joint6: {kp: 0.6, ki: 0.0, kd: 0.01, kff_v: 0.0, i_limit: 0.2, out_limit: 0.7, vel_filter_hz: 50.0, pos_min: -3.0, pos_max: 3.0}
+
+trajectory_planner:
+  ros__parameters:
+    rate_hz: 100.0
+    joint_names: [joint1, joint2, joint3]
+    max_velocity:     [1.0, 0.8, 0.8]   # rad/s
+    max_acceleration: [2.0, 1.5, 1.5]   # rad/s^2

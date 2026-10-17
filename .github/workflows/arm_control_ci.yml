@@ -1,0 +1,66 @@
+name: arm_control CI
+
+on:
+  push:
+    paths:
+      - "arm_control/**"
+      - ".github/workflows/arm_control_ci.yml"
+  pull_request:
+    paths:
+      - "arm_control/**"
+      - ".github/workflows/arm_control_ci.yml"
+  workflow_dispatch:
+
+jobs:
+  ros2:
+    name: ROS 2 ${{ matrix.distro }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [humble, jazzy]
+    container:
+      image: ros:${{ matrix.distro }}-ros-base
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          apt-get update
+          rosdep update --rosdistro ${{ matrix.distro }} || true
+          # --base-paths limits package discovery to arm_control/ros2: the book
+          # chapters contain duplicate package names that colcon would reject.
+          rosdep install --rosdistro ${{ matrix.distro }} --from-paths arm_control/ros2 --ignore-src -y
+          apt-get install -y ros-${{ matrix.distro }}-ament-cmake-gtest
+
+      - name: Build
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          colcon build --base-paths arm_control/ros2 --event-handlers console_direct+ \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+      - name: Test
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          colcon test --base-paths arm_control/ros2 --event-handlers console_direct+
+          colcon test-result --verbose
+
+  firmware:
+    name: ESP-IDF firmware (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [esp32, esp32s3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.3
+          target: ${{ matrix.target }}
+          path: arm_control/firmware/esp32_joint_controller
